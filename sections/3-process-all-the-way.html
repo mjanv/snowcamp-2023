@@ -1,0 +1,289 @@
+<section data-background-image="images/13.png">
+    <h1>Your world is concurrent</h1>
+</section>
+
+<section data-background-image="images/purple.png">
+    <h2 class="fragment">Data is immutable</h2>
+    <h2 class="fragment">Everything run in a process</h2>
+    <h2 class="fragment">Running a process is cheap</h2>
+    <h2 class="fragment">Asynchronous messages everywhere</h2>
+</section>
+
+<section data-background-image="images/purple.png">
+    <h2>How is the BEAM working ?</h2>
+</section>
+
+<section data-background-video="images/24.mp4" data-background-video-loop>
+</section>
+
+<section data-background-image="images/purple.png">
+    <h2>What is a process ?</h2>
+</section>
+
+<section data-background-color="white" data-background-video="images/process.mp4" data-background-size="contain" data-background-video-loop>
+</section>
+
+<section data-background-image="images/purple.png">
+    <h2>Start one process → spawn</h2>
+    
+    <pre class="fragment">
+        <code data-trim data-noescape>
+            iex> pid = spawn(fn -> IO.puts("Hi, I am a cell!") end)
+            Hi, I am a cell!
+            #PID<0.141.0>    
+        </code>
+    </pre>
+
+    <pre class="fragment">
+        <code data-trim data-noescape>
+            iex> Process.alive?(pid)                               
+            false   
+        </code>
+    </pre>
+</section>
+
+<section data-background-video="images/alone.mp4" data-background-video-loop>
+</section>
+
+<section data-background-image="images/purple.png">
+    <h2>Start an infinite process → receive</h2>
+
+    <pre class="fragment">
+        <code data-trim data-noescape data-line-numbers="|2-10|3,9|4-5|6-8|">
+            defmodule Cell do
+                def loop(count) do
+                    receive do
+                        :stop -> 
+                            exit(:normal)
+                        message -> 
+                            IO.puts("#{n}: #{message}")
+                            loop(count - 1)
+                    end
+                end
+            end
+        </code>
+    </pre>
+
+
+    <h2 class="fragment">Talk to a process → send</h2>
+
+    <pre class="fragment">
+        <code data-trim data-noescape>
+            pid = spawn(fn -> loop(10) end)
+            send(pid, "Hello")
+            send(pid, :stop)
+        </code>
+    </pre>
+</section>
+
+<section data-background-video="images/infinite.mp4" data-background-video-loop>
+</section>
+
+<section data-background-image="images/purple.png">
+    <h2>Start a thousand processes !</h2>
+
+    <pre class="fragment">
+        <code data-trim data-noescape data-line-numbers="|2-5|7-15">
+            defmodule Clock do
+                def start(count) do
+                    pid = spawn(fn -> loop(name, count) end)
+                    Process.send_after(pid, :tick, 1_000)
+                end
+            
+                def loop(_, 0), do: IO.puts("Stop")
+                def loop(name, count) do
+                    receive do
+                        :tick -> 
+                            IO.puts("#{name}: Tick #{count}")
+                            Process.send_after(self(), :tick, 500 + :rand.uniform(100))
+                            loop(name, count - 1)
+                    end
+                end
+            end
+        </code>
+    </pre>
+
+    <pre class="fragment">
+        <code data-trim data-noescape>
+            for i <- 1..1000 do
+                Clock.start("clock-#{i}", 10)
+            end
+        </code>
+    </pre>
+</section>
+
+<section data-background-video="videos/processes.mp4" data-background-video-loop>
+</section>
+
+<section data-background-image="images/purple.png">
+    💜
+    <h1>Genserver</h1>
+    <br \>
+
+    <h3 class="fragment">handle_call(message, state) -> state'</h3>
+    <h3 class="fragment">handle_cast(message, from, state) -> state'</h3>
+</section>
+
+<section data-background-image="images/purple.png">
+    <pre class="elixir">
+        <code data-trim data-noescape data-line-numbers="|2|4-10|12-14|16-19">
+            defmodule Cell do
+                use GenServer
+            
+                def start_link(count) do
+                    GenServer.start_link(__MODULE__, count)
+                end
+            
+                def init(count) do
+                    {:ok, count}
+                end
+            
+                def handle_call(:stop, _from, count) do
+                    {:stop, :normal, count}
+                end
+            
+                def handle_cast(message, count) do
+                    IO.puts("#{count}: #{message}")
+                    {:noreply, count - 1}
+                end
+            end          
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/purple.png">
+    <pre class="elixir">
+        <code data-trim data-noescape data-line-numbers="|2|4-11|13-16|18-22">
+            defmodule Clock do
+                use GenServer
+            
+                def start_link(count) do
+                    GenServer.start_link(__MODULE__, count)
+                end
+            
+                def init(count) do
+                    Process.send_after(self(), :tick, 1000)
+                    {:ok, count}
+                end
+            
+                def handle_info(:tick, 0) do
+                    IO.puts("Stop")
+                    {:stop, :normal, 0}
+                end
+            
+                def handle_info(:tick, count) do
+                    IO.puts("Tick #{count}")
+                    Process.send_after(self(), :tick, 500 + :rand.uniform(100))
+                    {:noreply, count - 1}
+                end
+            end
+        </code>
+    </pre>
+</section>
+
+<section data-background-video="images/genserver.mp4" data-background-video-loop></section>
+
+<section data-background-video="images/lot.mp4" data-background-video-loop></section>
+
+<section  data-background-image="images/purple.png">
+    <h2>Link two processes</h2>
+
+    <pre class="fragment">
+        <code data-trim data-noescape data-line-numbers="1|3-8|7|10-14">
+            current = self()
+
+            spawn_link(fn -> 
+              for i <- 1..5 do
+                send(current, i)
+              end
+              exit(:normal)
+            end)
+            
+            for _ <- 1..5 do
+              receive do
+                msg -> IO.puts(msg)
+              end
+            end
+        </code>
+    </pre>
+
+    <pre class="fragment">
+        <code data-trim data-noescape>
+            1
+            2
+            3
+            4
+            5
+        </code>
+    </pre>
+</section>
+
+<section  data-background-image="images/purple.png">
+    <pre class="fragment">
+        <code data-trim data-noescape data-line-numbers="|7">
+            current = self()
+
+            spawn_link(fn -> 
+              for i <- 1..5 do
+                send(current, i)
+              end
+              exit(:noooooo)
+            end)
+            
+            for _ <- 1..5 do
+              receive do
+                msg -> IO.puts(msg)
+              end
+            end
+        </code>
+    </pre>
+
+    <pre class="fragment">
+        <code data-trim data-noescape>
+            ** (EXIT from #PID<0.107.0>) shell process exited with reason: :noooooo 
+        </code>
+    </pre>
+</section>
+
+<section data-background-video="images/link.mp4" data-background-video-loop></section>
+
+
+<section  data-background-image="images/purple.png">
+    <h2>Supervisors</h2>
+</section>
+
+<section  data-background-image="images/purple.png">
+    <pre class="elixir">
+        <code data-trim data-noescape data-line-numbers="|2|8-15">
+            defmodule CellClockSupervisor do
+                use Supervisor
+            
+                def start_link do
+                    Supervisor.start_link(__MODULE__, :ok)
+                end
+            
+                def init(_) do
+                    children = [
+                        {Clock, [5_000]},
+                        {Cell, [10_000]}
+                    ]
+                
+                    Supervisor.init(children, [strategy: :one_for_one])
+                end
+            end
+        </code>
+    </pre>
+
+    <pre class="elixir fragment">
+        <code data-trim data-noescape data-line-numbers="">
+            CellClockSupervisor.start_link()
+        </code>
+    </pre>
+</section>
+
+<section data-background-video="images/supervisor.mp4" data-background-video-loop></section>
+
+
+<section data-background-video="images/services.mp4" data-background-video-loop></section>
+
+

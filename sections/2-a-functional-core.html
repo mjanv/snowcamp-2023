@@ -1,0 +1,223 @@
+<section data-background-image="images/12.png">
+    <h1>Your core is functional</h1>
+</section>
+
+<section data-background-image="images/pink.png">
+    <h2 class="fragment">Dynamic language</h2>
+    <h2 class="fragment">Data is immutable</h2>
+    <h2 class="fragment">Functions are pure</h2>
+</section>
+
+<section data-background-image="images/pink.png">
+    <pre class="elixir fragment">
+        <code data-trim data-noescape data-line-numbers="1-2|3|4-5|6|7|8|9|10|11">
+        1                   # Integers
+        1.4                 # Floats
+        nil                 # Null value
+        true                # Booleans
+        false               #
+        :symbol             # Atoms (💜)
+        {1, 2, 3}           # Tuples
+        [1, 2, 3]           # Lists
+        %{a: 1, b: 2, c: 3} # Maps
+        "string"            # Strings
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/pink.png"">
+    <h2>Modules</h2>
+    <pre class="elixir fragment">
+        <code data-trim data-noescape>
+        defmodule MyModule do
+        end          
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/pink.png">
+    <h2>Structures</h2>
+
+    <pre class="elixir fragment">
+        <code data-trim data-noescape>
+            defmodule Item do
+                defstruct title: "", price: 0.0
+            end
+        </code>
+    </pre>
+
+    <pre class="elixir fragment">
+        <code data-trim data-noescape>
+            iex> %Item{items: "apple", price: 1.4}
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/pink.png">
+    <h2>Functions</h2>
+    <pre class="elixir fragment">
+        <code data-trim data-noescape data-line-numbers="1,5|2-4">
+        defmodule MyModule do
+            def say_hello do
+                IO.puts "Hello!"
+            end
+        end          
+        </code>
+    </pre>
+    <pre class="elixir fragment">
+        <code data-trim data-noescape>
+        iex> MyModule.say_hello
+        Hello!
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/pink.png">
+    <h2>Functions</h2>
+    <pre class="elixir fragment">
+        <code data-trim data-noescape data-line-numbers="|2-4|6-8|">
+        defmodule Rectangle do
+            def area(a, b) do
+                a * b
+            end
+
+            def area(a) do
+                area(a, a)
+            end
+        end
+        </code>
+    </pre>
+
+    <pre class="elixir fragment">
+        <code data-trim data-noescape>
+            iex> Rectangle.area(3, 4)
+            12
+
+            iex> Rectangle.area(5)
+            25            
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/pink.png">
+    <h2>Pipelines</h2>
+</section>
+
+<section data-background-image="images/pipeline.png">
+</section>
+
+<section data-background-image="images/pink.png">
+    <pre class="elixir">
+        <code data-trim data-noescape data-line-numbers="|2-4|6-12">
+        defmodule Maths do
+            def oneliner(n) do
+                Enum.sum( Enum.map(Enum.filter(1..n, fn x -> Integer.is_odd(x) end), 
+                fn x -> x * x end))
+            end
+
+            def pipeline(n) do
+                1..n
+                |> Enum.filter(fn x -> Integer.is_odd(x) end)
+                |> Enum.map(fn x -> x * x end)
+                |> Enum.sum()
+            end
+        end 
+        </code>
+    </pre>
+    <pre class="elixir fragment">
+        <code data-trim data-noescape>
+            iex> Maths.oneliner(100)
+            338350
+            
+            iex> Maths.pipeline(100)
+            338350    
+        </code>
+    </pre>
+</section>
+
+<section data-background-video="images/21.mp4" data-background-video-loop></section>
+</section>
+
+<section data-background-image="images/pink.png">
+    <h2>Pattern matching</h2>
+</section>
+
+<section data-background-image="images/pink.png">
+    <pre class="elixir">
+        <code data-trim data-noescape>
+            iex> {:ok, b, c} = {:ok, 2, 3}
+            {:ok, 2, 3}
+            iex> b
+            2
+            iex> c
+            3
+        </code>
+    </pre>
+
+    <pre class="elixir fragment">
+        <code data-trim data-noescape>
+            iex> {:ok, b, c} = {:nope, 2, 3}
+            ** (MatchError) no match of right hand side value: {:nope, 2, 3}
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/pink.png">
+    <pre class="elixir fragment">
+        <code data-trim data-noescape>
+            iex> [head | tail] = [1, 2, 3]
+            [1, 2, 3]
+            iex> head
+            1
+            iex> tail
+            [2, 3]
+        </code>
+    </pre>
+
+    <pre class="elixir fragment">
+        <code data-trim data-noescape>
+            iex> item = %Item{price: 1.3}
+            iex> %Item{price: p} = item
+            iex> p
+            1.3
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/pink.png">
+    <pre class="elixir fragment">
+        <code data-trim data-noescape data-line-numbers="|2-3|5-6|8|">
+        defmodule Sums do
+            def sum([]), do: 0.0
+            def sum([%Item{price: price} | items]), do: price + sum(items)
+
+            def sum([]), do: 0.0
+            def sum([head | tail]), do: head + sum(tail)
+
+            def sum(_), do: -1.0
+        end
+        </code>
+    </pre>
+
+    <pre class="fragment">
+        <code data-trim data-noescape>
+            iex> Sums.sum([%Item{price: 2.1}, %Item{price: 3.4}, %Item{price: 1.0}])
+            6.5
+        
+            iex> Sums.sum([1.0, 2.0, 3.0])
+            6.0
+
+            iex> Sums.sum(%{a: 1})
+            -1.0
+        </code>
+    </pre>
+</section>
+
+<section data-background-video="images/22.mp4" data-background-video-loop></section>
+</section>
+
+<section data-background-image="images/pink.png">
+    <h2 class="fragment">Elixir is functional and dynamic</h2>
+    <h2 class="fragment">Data is immutable</h2>
+    <h2 class="fragment">Pipelines + pattern matching = 💜</h2>
+</section>

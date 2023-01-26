@@ -1,0 +1,381 @@
+<section data-background-image="images/fond.png">
+    <h1>Let's build an app!</h1>
+</section>
+
+<section data-background-image="images/fond.png">
+  <h1>Conway's Game of life</h1>
+</section>
+
+<section data-background-image="/images/conway.webp">
+</section>
+
+<section data-background-video="images/ping.mp4" data-background-video-loop></section>
+
+<section data-background-color="white">
+  <img src="/images/world.png">
+</section>
+
+<section data-background-color="white">
+  <h2>Two (micro?)services into one monolith</h2>
+  <img src="/images/gameoflife.drawio.png">
+</section>
+
+<section data-background-image="images/purple.png">
+  <h2>Backend Service</h2>
+</section>
+
+<section data-background-image="images/purple.png">
+    <h2>Events</h2>
+
+    <pre class="fragment elixir">
+        <code data-trim data-noescape data-line-numbers="|2-8|10-12|14-20">
+            defmodule Gameoflife.Events do
+                defmodule Tick do
+                    defstruct [:t]
+                end
+            
+                defmodule Tock do
+                    defstruct [:t]
+                end
+            
+                defmodule Ping do
+                    defstruct [:t]
+                end
+            
+                defmodule On do
+                    defstruct [:t, :x, :y]
+                end
+            
+                defmodule Off do
+                    defstruct [:t, :x, :y]
+                end
+            end
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/purple.png">
+    <pre class="elixir">
+        <code data-trim data-noescape data-line-numbers="|2-4|8-15|16-22|24-37|39-41|43-58|44-49|51-55|57">
+            defmodule Gameoflife.Cell do
+              defstruct [:world, :x, :y, :t, :alive?, :neighbors, :failure_rate]
+          
+              use GenServer
+          
+              alias Gameoflife.Events.{Off, On, Ping, Tick, Tock}
+          
+              def start_link(args) do
+                GenServer.start_link(__MODULE__, args, name: args[:via])
+              end
+          
+              def init(cell) do
+                {:ok, cell}
+              end
+
+              def broadcast(cell, event) do
+                Phoenix.PubSub.broadcast(Gameoflife.PubSub, "world:" <> cell.world.id, event)
+              end
+            
+              def cast(id, x, y, msg) do
+                GenServer.cast({:via, Registry, {Gameoflife.Registry, "cell-#{id}-#{x}-#{y}"}}, msg)
+              end
+ 
+              def handle_cast(%Tick{t: t}, cell) do
+                if cell.alive? do
+                  cast(cell.world.id, cell.x - 1, cell.y - 1, %Ping{t: t})
+                  cast(cell.world.id, cell.x - 1, cell.y + 0, %Ping{t: t})
+                  cast(cell.world.id, cell.x - 1, cell.y + 1, %Ping{t: t})
+                  cast(cell.world.id, cell.x + 0, cell.y - 1, %Ping{t: t})
+                  cast(cell.world.id, cell.x + 0, cell.y + 1, %Ping{t: t})
+                  cast(cell.world.id, cell.x + 1, cell.y - 1, %Ping{t: t})
+                  cast(cell.world.id, cell.x + 1, cell.y + 0, %Ping{t: t})
+                  cast(cell.world.id, cell.x + 1, cell.y + 1, %Ping{t: t})
+                end
+            
+                {:noreply, %{cell | t: t}}
+              end
+
+              def handle_cast(%Ping{t: t}, cell) do            
+                {:noreply, %{cell | neighbors: cell.neighbors + 1}}
+              end
+          
+              def handle_cast(%Tock{t: t}, cell) do
+                alive? =
+                  case {cell.alive?, cell.neighbors} do
+                    {true, 2} -> true
+                    {_, 3} -> true
+                    _ -> false
+                  end
+            
+                case {cell.alive?, alive?} do
+                  {false, true} -> broadcast(cell, %On{t: cell.t, x: cell.x, y: cell.y})
+                  {true, false} -> broadcast(cell, %Off{t: cell.t, x: cell.x, y: cell.y})
+                  _ -> :ok
+                end
+            
+                {:noreply, %{cell | t: t, neighbors: 0, alive?: alive?}}
+              end
+          end
+        </code>
+    </pre>
+</section>
+
+
+<section data-background-image="images/purple.png">
+    <pre class="elixir">
+        <code data-trim data-noescape data-line-numbers="|2-4|8-16|17-24|26-30|31-39">
+        defmodule Gameoflife.Clock do
+            defstruct id: nil, world: nil, t: 0
+        
+            use GenServer
+        
+            alias Gameoflife.Events.{Tick, Tock}
+                
+            def start_link(args) do
+                GenServer.start_link(__MODULE__, args, name: args[:via])
+            end
+        
+            def init(args) do
+                Process.send_after(self(), :tick, 1_000)
+                {:ok, args[:clock]}
+            end
+        
+            def handle_info(:tick, clock) do
+                Process.send_after(self(), :tick, 1_000)
+                Process.send_after(self(), :tock, 500)
+            
+                broadcast(clock, %Tick{t: clock.t + 1})
+    
+                {:noreply, %{clock | t: clock.t + 1}}
+            end
+        
+            def handle_info(:tock, clock) do
+                broadcast(clock, %Tock{t: clock.t + 1})
+                {:noreply, clock}
+            end
+
+            defp broadcast(clock, event) do
+                for i <- 0..(clock.world.rows - 1) do
+                    for j <- 0..(clock.world.columns - 1) do
+                        Gameoflife.Cell.cast(clock.world.id, i, j, event)
+                    end
+                end
+    
+                Phoenix.PubSub.broadcast(Gameoflife.PubSub, "world:" <> clock.world.id, event)
+            end
+          end          
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/purple.png">
+    <pre class="elixir">
+        <code data-trim data-noescape data-line-numbers="|1-15|17-28|30-36">
+          defmodule Gameoflife.World do
+            defstruct [:id, :columns, :rows]
+          
+            use Supervisor
+          
+            alias Gameoflife.{Cell, Clock, World}
+          
+            def start_link(args) do
+              Supervisor.start_link(__MODULE__, args)
+            end
+          
+            @impl true
+            def init(args) do
+              Supervisor.init(args[:children], strategy: :one_for_one)
+            end
+          
+            def new(columns, rows) do
+              world = %World{id: id(4), columns: columns, rows: rows}
+              {:ok, pid} =
+                DynamicSupervisor.start_child(
+                  Gameoflife.BackendService,
+                  {__MODULE__,
+                   [
+                     id: id,
+                     children: cells(world) ++ clock(world)
+                   ]}
+                )
+            end
+          
+            def cells(%World{rows: n, columns: m} = world) do
+                ...
+            end
+          
+            def clock(%World{id: id} = world) do
+              ...
+            end
+          end                              
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/purple.png">
+    <h2>Web Service</h2>
+</section>
+
+<section data-background-image="images/purple.png">
+    <pre class="fragment elixir">
+        <code data-trim data-noescape data-line-numbers="|2|6-9|11-14|16-19|21-23">
+          defmodule Gameoflife.WebService.WorldLive do
+            use Gameoflife.WebService, :live_view
+          
+            alias Gameoflife.Events.{Off, On, Tick, Tock}
+                    
+            def mount(%{"id" => id}, _args, socket) do
+              Phoenix.PubSub.subscribe(Gameoflife.PubSub, "world:#{id}")
+              {:ok, assign(socket, t: nil, id: id, world: world, grid: %{}, buffer: %{})}
+            end
+          
+            def handle_info(%On{x: x, y: y}, %{assigns: %{buffer: buffer}} = socket) do
+              buffer = Map.put(buffer, {x, y}, :on)
+              {:noreply, assign(socket, buffer: buffer)}
+            end
+          
+            def handle_info(%Off{x: x, y: y}, %{assigns: %{buffer: buffer}} = socket) do
+              buffer = Map.put(buffer, {x, y}, :off)
+              {:noreply, assign(socket, buffer: buffer)}
+            end
+
+            def handle_info(%Tock{t: t}, %{assigns: %{grid: grid, buffer: buffer}} = socket) do
+              {:noreply, assign(socket, t: t, grid: Map.merge(grid, buffer), buffer: %{})}
+            end
+          end                                
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/purple.png">
+  <pre class="fragment">
+      <code data-trim data-noescape data-line-numbers="|1-2,10-11|4-8">
+        <script type="text/template">
+          <div class="mt-5 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-#{@world.rows} mt-4 border">
+
+              <%= for i <- 0..(@world.rows - 1) do %>
+                <%= for j <- 0..(@world.columns - 1) do %>
+                  <div class={Map.get(@grid, {i, j})}></div>
+                <% end %>
+              <% end %>
+
+            </div>
+          </div>
+        </script>
+      </code>
+  </pre>
+</section>
+
+<section data-background-image="images/purple.png">
+    <h2>(Micro)services & Application</h2>
+</section>
+
+<section data-background-image="images/purple.png">
+  <pre class="elixir">
+      <code data-trim data-noescape data-line-numbers="|9">
+        defmodule Gameoflife.BackendService do        
+          use DynamicSupervisor
+        
+          def start_link(args) do
+            Supervisor.start_link(__MODULE__, args)
+          end
+        
+          def init(_args) do
+            DynamicSupervisor.init(strategy: :one_for_one)
+          end
+        end                      
+      </code>
+  </pre>
+</section>
+
+<section data-background-image="images/purple.png">
+  <pre>
+      <code data-trim data-noescape data-line-numbers="|7-8">
+        defmodule Gameoflife.WebService do
+          use Supervisor
+        
+          @impl true
+          def init(_init_arg) do
+            children = [
+              {Phoenix.PubSub, name: Gameoflife.PubSub},
+              Gameoflife.WebService.Endpoint
+            ]
+        
+            Supervisor.init(children, strategy: :one_for_one)
+          end
+        end                        
+      </code>
+  </pre>
+</section>
+
+<section data-background-image="images/purple.png">
+    <pre class="elixir">
+        <code data-trim data-noescape data-line-numbers="|6-7">
+        defmodule Gameoflife.Application do
+            use Application
+
+            def start(_type, _args) do
+              children = [
+                Gameoflife.WebService,
+                Gameoflife.BackendService,
+              ]
+
+              Supervisor.start_link(children, strategy: :one_for_one)
+            end
+        end                 
+        </code>
+    </pre>
+</section>
+
+<section data-background-image="images/purple.png">
+    <pre class="elixir">
+        <code data-trim data-noescape  data-line-numbers="|15">
+        defmodule Gameoflife.MixProject do
+            use Mix.Project
+          
+            def project do
+              [
+                app: :gameoflife,
+                version: "0.1.0",
+                elixir: "~> 1.12",
+                deps: deps()
+              ]
+            end
+          
+            def application do
+              [
+                mod: {Gameoflife.Application, []}
+              ]
+            end
+    
+            defp deps do
+              [
+                {:phoenix, "~> 1.6.6"},
+                ...
+              ]
+            end
+          end                          
+        </code>
+    </pre>
+</section>
+
+
+<section>
+    <h2 class="fragment">mix deps.get</h2>
+    <h2 class="fragment">mix release</h2>
+    <h2 class="fragment">./gameoflife start</h2>
+    <h2 class="fragment"><a href="https://gameoflife.fly.dev/">https://gameoflife.fly.dev</a></h2>
+</section>
+
+<section data-background-video="videos/gameoflife_64.mkv" data-background-video-loop></section>
+<section data-background-video="videos/gameoflife_128.mkv" data-background-video-loop></section>
+<section data-background-video="videos/gameoflife_320.mkv" data-background-video-loop></section>
+<section data-background-video="videos/gameoflife_512.mkv" data-background-video-loop></section>
+<section data-background-image="images/flyio.png" data-background-size="contain"></section>
+
+
+
+
+
+
